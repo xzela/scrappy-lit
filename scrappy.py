@@ -3,6 +3,19 @@ import requests
 from pyquery import PyQuery as pq
 from bs4 import BeautifulSoup
 from lxml import html
+import time
+
+def request_page(href, num):
+    '''Gets the next page'''
+    link = href + "?page=" + str(num)
+    req = requests.get(link, headers=headers)
+    print("%s, %s" % (link, req.status_code))
+    time.sleep(2.5)
+    if req.status_code == 200:
+        num += 1
+        request_page(href, num)
+    else:
+        print(link + " Gave a " + str(req.status_code))
 
 URL = "https://www.literotica.com/c/mature-sex/78-page"
 headers = {
@@ -15,3 +28,8 @@ links = []
 for story in stories:
     links.append(story.find('h3').find('a')['href'])
 print(links)
+
+for link in links:
+    print("STARTING===: " + link)
+    request_page(link, 1)
+    print("DONE WITH==: " + link)
