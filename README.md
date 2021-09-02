@@ -9,6 +9,11 @@ source scrappy-env/bin/activate
 ```
 
 ## Install the Dependencies
-```
+```sh
 python3 -m pip install -r requirements.txt
+```
+
+## Run
+```sh
+python 3 scrappy.py
 ```
