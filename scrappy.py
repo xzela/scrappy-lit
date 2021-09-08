@@ -14,12 +14,10 @@ HEADERS = {
 def extract_article(soup):
     '''Extracts the text from the article'''
     panel = soup.select('div.panel.article')[0]
-    print ()
     texts = []
     paragraphs = panel.find_all('p')
     for p in paragraphs:
         texts.append(p.text)
-    print(texts)
     return texts
 
 def process_request(href, num, content):
@@ -30,7 +28,8 @@ def process_request(href, num, content):
         time.sleep(2.5)
         num += 1
         soup = BeautifulSoup(req.text, 'html.parser')
-        content.append(extract_article(soup))
+        content['title'] = soup.select('h1.headline')[0].text
+        content['raw_text'] = content['raw_text'] + extract_article(soup)
         return process_request(href, num, content)
     else:
         print("%s Gave a %s" % (link, str(req.status_code)))
@@ -59,10 +58,11 @@ for story in stories:
     links.append(story.find('h3').find('a')['href'])
 
 for link in links:
+    content = { 'title': '', 'raw_text': [] }
     print("STARTING===: " + link)
     if (link not in keys):
-        content = process_request(link, 1, [])
-        print("FOUND %s Number Article Pages " % len(content))
+        content = process_request(link, 1, content)
+        print("FOUND %s Number Article Pages " % len(content['raw_text']))
         print("DONE WITH==: " + link)
 
         with open(LINK_LOG_PATH) as json_file:
@@ -72,7 +72,9 @@ for link in links:
             except ValueError:
                 print('OP LOG EMPTY, Using')
                 decode = { }
-
+        # print(content['raw_text'])
+        content['text'] = ' '.join(content['raw_text'])
+        content.pop('raw_text', None)
         decode[link] = content
 
         with open(LINK_LOG_PATH, 'w') as json_file:

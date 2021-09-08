@@ -15,5 +15,5 @@ python3 -m pip install -r requirements.txt
 
 ## Run
 ```sh
-python 3 scrappy.py
+python3 scrappy.py
 ```
