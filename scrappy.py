@@ -82,8 +82,8 @@ def fetch_category_page(category, num):
 
 links = []
 for category in CATEGORIES:
-    num = 1
-    while len(fetch_category_page(category, num)) > 0:
+    num = 34
+    while stories := fetch_category_page(category, num):
         time.sleep(1.5)
         num += 1
         for story in stories:
