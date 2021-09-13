@@ -50,22 +50,37 @@ def determine_articles(href, num, content):
         print("%s Gave a %s" % (link, str(req.status_code)))
     return content
 
-def extract_existing_keys():
-    keys = []
+def open_oplog():
     if not os.path.exists(LINK_LOG_PATH):
         with open(LINK_LOG_PATH, 'w'): pass
-
-    with open(LINK_LOG_PATH, 'r') as content:
+    with open(LINK_LOG_PATH, 'r') as json_file:
         try:
-            keys = json.load(content).keys()
-            content.close()
+            content = json.load(json_file)
+            json_file.close()
+            return content
         except ValueError:
-            print('OP LOG EMPTY, Using')
-    return keys
+            print('OP LOG EMPTY')
+    return { }
 
-# Load up the Content JSON file
-keys = extract_existing_keys()
-print(keys)
+def write_oplog(content):
+    with open(LINK_LOG_PATH, 'w') as json_file:
+        json.dump(content, json_file, indent=4)
+        json_file.close()
+
+def write_story_link(category, link):
+    file_content = open_oplog()
+
+    # Check to see if we've already got this category written down
+    if category not in file_content:
+        file_content[category] = { }
+
+    if link in file_content[category]:
+        print("Skipping %s link: %s" % (category, link))
+        return
+    else:
+        file_content[category][link] = { }
+
+    write_oplog(file_content)
 
 def fetch_category_page(category, num):
     '''Loops through a category and determines the number of pages of articles'''
@@ -76,6 +91,9 @@ def fetch_category_page(category, num):
     if page.status_code == 200:
         soup = BeautifulSoup(page.text, 'html.parser')
         stories = soup.find_all('div', class_='b-sl-item-r')
+        for story in stories:
+            link = story.find('h3').find('a')['href']
+            write_story_link(category, link)
         return stories
     else:
         return []
@@ -88,7 +106,6 @@ for category in CATEGORIES:
         num += 1
         for story in stories:
             links.append(story.find('h3').find('a')['href'])
-    print(links)
     print("Found %s Pages for %s Category" % (num, category))
 
 # for link in links:
