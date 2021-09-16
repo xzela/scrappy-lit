@@ -1,7 +1,5 @@
 '''Some module'''
 from bs4 import BeautifulSoup
-import json
-import os
 import requests
 import sqlite3
 import signal
@@ -10,7 +8,6 @@ import time
 
 
 DB_PATH ='./db/database.sqlite3'
-LINK_LOG_PATH = './oplog/content.json'
 URL = "https://www.literotica.com/c/mature-sex/77-page"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
@@ -73,38 +70,6 @@ def determine_articles(href, num, content):
     else:
         print("%s Gave a %s" % (link, str(req.status_code)))
     return content
-
-def open_oplog():
-    if not os.path.exists(LINK_LOG_PATH):
-        with open(LINK_LOG_PATH, 'w'): pass
-    with open(LINK_LOG_PATH, 'r') as json_file:
-        try:
-            content = json.load(json_file)
-            json_file.close()
-            return content
-        except ValueError:
-            print('OP LOG EMPTY')
-    return { }
-
-def write_oplog(content):
-    with open(LINK_LOG_PATH, 'w') as json_file:
-        json.dump(content, json_file, indent=4)
-        json_file.close()
-
-def write_story_link(category, link):
-    file_content = open_oplog()
-
-    # Check to see if we've already got this category written down
-    if category not in file_content:
-        file_content[category] = { }
-
-    if link in file_content[category]:
-        print("Skipping %s link: %s" % (category, link))
-        return
-    else:
-        file_content[category][link] = { }
-
-    write_oplog(file_content)
 
 def fetch_category_page(category, num):
     '''Loops through a category and determines the number of pages of articles'''
