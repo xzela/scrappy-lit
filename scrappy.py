@@ -1,16 +1,20 @@
 '''Some module'''
-import requests
 from bs4 import BeautifulSoup
-import time
 import json
 import os
+import requests
+import sqlite3
+import signal
+import sys
+import time
 
+
+DB_PATH ='./db/database.sqlite3'
 LINK_LOG_PATH = './oplog/content.json'
 URL = "https://www.literotica.com/c/mature-sex/77-page"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
 }
-
 CATEGORIES = [
     'anal-sex-stories',
     'bdsm-stories',
@@ -25,6 +29,26 @@ CATEGORIES = [
     'adult-romance',
     'transgender-crossdressers'
 ]
+
+connection = sqlite3.connect(DB_PATH)
+cursor = connection.cursor()
+cursor.execute('CREATE TABLE IF NOT EXISTS content (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, link TEXT, title TEXT, content TEXT);')
+
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    connection.close()
+    sys.exit(0)
+
+def insert_record(category, link):
+    cursor.execute('SELECT * FROM content WHERE category=? AND link=?', (category, link))
+    row = cursor.fetchone()
+    if row and row[0] > 0:
+        print("Skipping %s %s" % (category, link))
+        return
+    cursor.execute('INSERT INTO content (category, link) VALUES (?, ?) ', (category, link))
+    connection.commit()
+
+signal.signal(signal.SIGINT, signal_handler)
 
 def extract_article(soup):
     '''Extracts the text from an article page'''
@@ -93,14 +117,14 @@ def fetch_category_page(category, num):
         stories = soup.find_all('div', class_='b-sl-item-r')
         for story in stories:
             link = story.find('h3').find('a')['href']
-            write_story_link(category, link)
+            insert_record(category, link)
         return stories
     else:
         return []
 
 links = []
 for category in CATEGORIES:
-    num = 34
+    num = 1
     while stories := fetch_category_page(category, num):
         time.sleep(1.5)
         num += 1

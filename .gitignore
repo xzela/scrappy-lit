@@ -131,3 +131,4 @@ dmypy.json
 # Custom
 scrappy-env
 oplog/*
+db/*
