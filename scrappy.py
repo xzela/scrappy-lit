@@ -1,5 +1,7 @@
 '''Some module'''
 from bs4 import BeautifulSoup
+import coloredlogs
+import logging
 import requests
 import sqlite3
 import signal
@@ -8,7 +10,6 @@ import time
 
 
 DB_PATH ='./db/database.sqlite3'
-URL = "https://www.literotica.com/c/mature-sex/77-page"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
 }
@@ -32,7 +33,7 @@ cursor = connection.cursor()
 cursor.execute('CREATE TABLE IF NOT EXISTS content (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, link TEXT, title TEXT, content TEXT);')
 
 def signal_handler(sig, frame):
-    print('You pressed Ctrl+C!')
+    logging.critical('You pressed Ctrl+C! Closing Application')
     connection.close()
     sys.exit(0)
 
@@ -40,7 +41,7 @@ def insert_record(category, link):
     cursor.execute('SELECT * FROM content WHERE category=? AND link=?', (category, link))
     row = cursor.fetchone()
     if row and row[0] > 0:
-        print("Skipping %s %s" % (category, link))
+        logging.warning("Skipping Category: %s Link: %s" % (category, link))
         return
     cursor.execute('INSERT INTO content (category, link) VALUES (?, ?) ', (category, link))
     connection.commit()
@@ -75,7 +76,7 @@ def fetch_category_page(category, num):
     '''Loops through a category and determines the number of pages of articles'''
     # Fetch the initial page
     BASE_URL = 'https://www.literotica.com/c/' + str(category) + '/' + str(num) + '-page'
-    print(BASE_URL)
+    logging.info("Fetching URL: %s", BASE_URL)
     page = requests.get(BASE_URL, headers=HEADERS, allow_redirects=False)
     if page.status_code == 200:
         soup = BeautifulSoup(page.text, 'html.parser')
@@ -87,15 +88,22 @@ def fetch_category_page(category, num):
     else:
         return []
 
-links = []
-for category in CATEGORIES:
-    num = 1
-    while stories := fetch_category_page(category, num):
-        time.sleep(1.5)
-        num += 1
-        for story in stories:
-            links.append(story.find('h3').find('a')['href'])
-    print("Found %s Pages for %s Category" % (num, category))
+def main():
+    logging.info("Initializing")
+    links = []
+    for category in CATEGORIES:
+        num = 1
+        while stories := fetch_category_page(category, num):
+            time.sleep(1.5)
+            num += 1
+            for story in stories:
+                links.append(story.find('h3').find('a')['href'])
+        logging.info("Found %s Pages for %s Category" % (num, category))
+
+if __name__ == "__main__":
+    format = "[%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s"
+    coloredlogs.install(fmt=format, level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S")
+    main()
 
 # for link in links:
 #     content = { 'title': '', 'raw_text': [] }
