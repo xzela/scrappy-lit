@@ -2,12 +2,15 @@
 from bs4 import BeautifulSoup
 import coloredlogs
 import logging
+from queue import Queue
+from threading import Thread
+from time import time
 import requests
 import sqlite3
 import signal
 import sys
 import time
-
+import concurrent.futures
 
 DB_PATH ='./db/database.sqlite3'
 HEADERS = {
@@ -28,23 +31,33 @@ CATEGORIES = [
     'transgender-crossdressers'
 ]
 
-connection = sqlite3.connect(DB_PATH)
+connection = sqlite3.connect(DB_PATH, check_same_thread=False)
+connection.row_factory = sqlite3.Row
 cursor = connection.cursor()
 cursor.execute('CREATE TABLE IF NOT EXISTS content (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, link TEXT, title TEXT, content TEXT);')
+cursor.execute('CREATE INDEX IF NOT EXISTS category_index ON content (category);')
 
 def signal_handler(sig, frame):
     logging.critical('You pressed Ctrl+C! Closing Application')
     connection.close()
     sys.exit(0)
 
-def insert_record(category, link):
+def insert_link(category, link):
     cursor.execute('SELECT * FROM content WHERE category=? AND link=?', (category, link))
     row = cursor.fetchone()
-    if row and row[0] > 0:
+    if row and len(row) > 0:
         logging.warning("Skipping Category: %s Link: %s" % (category, link))
         return
-    cursor.execute('INSERT INTO content (category, link) VALUES (?, ?) ', (category, link))
+    cursor.execute('INSERT INTO content (category, link) VALUES (?, ?)', (category, link))
     connection.commit()
+
+def update_link(category, link, title, text):
+    cursor.execute('SELECT * FROM content WHERE category=? AND link=?', (category, link))
+    row = cursor.fetchone()
+    if row and len(row) > 0 and not row['title']:
+        id = row['id']
+        cursor.execute('UPDATE content SET title=?, content=? WHERE id=?', (title, text, id))
+        connection.commit()
 
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -57,9 +70,11 @@ def extract_article(soup):
         texts.append(p.text)
     return texts
 
-def determine_articles(href, num, content):
+def determine_articles(href, pagination, num, content):
     '''Gets a list of articles from the results page'''
-    link = href + "?page=" + str(num)
+    link = href
+    if pagination == True:
+        link += "?page=" + str(num)
     req = requests.get(link, headers=HEADERS, allow_redirects=False)
     if req.status_code == 200:
         time.sleep(2.5)
@@ -67,9 +82,9 @@ def determine_articles(href, num, content):
         soup = BeautifulSoup(req.text, 'html.parser')
         content['title'] = soup.select('h1.headline')[0].text
         content['raw_text'] = content['raw_text'] + extract_article(soup)
-        return determine_articles(href, num, content)
+        return determine_articles(href, True, num, content)
     else:
-        print("%s Gave a %s" % (link, str(req.status_code)))
+        logging.warning("URL: %s Returned status code: %s", link, str(req.status_code))
     return content
 
 def fetch_category_page(category, num):
@@ -81,55 +96,40 @@ def fetch_category_page(category, num):
     if page.status_code == 200:
         soup = BeautifulSoup(page.text, 'html.parser')
         stories = soup.find_all('div', class_='b-sl-item-r')
+        links = []
         for story in stories:
-            link = story.find('h3').find('a')['href']
-            insert_record(category, link)
-        return stories
+            # link = story.find('h3').find('a')['href']
+            links.append(story.find('h3').find('a')['href'])
+            # insert_link(category, link)
+        return links
     else:
         return []
 
 def main():
     logging.info("Initializing")
-    links = []
     for category in CATEGORIES:
-        num = 1
-        while stories := fetch_category_page(category, num):
-            time.sleep(1.5)
+        num = 34
+        links = []
+        while items := fetch_category_page(category, num):
+            # time.sleep(0.01)
             num += 1
-            for story in stories:
-                links.append(story.find('h3').find('a')['href'])
-        logging.info("Found %s Pages for %s Category" % (num, category))
+            for story in items:
+                links.append(story)
+        for link in links:
+            insert_link(category, link)
+            content = determine_articles(link, False, 1, { 'raw_text': [] })
+            content['text'] = ' '.join(content['raw_text'])
+            content.pop('raw_text', None)
+            update_link(category, link, content['title'], content['text'])
+
+        # logging.info("Found %s Pages for %s Category" % (len(links), category))
+        # with concurrent.futures.ProcessPoolExecutor() as executor:
+        #     futures = []
+        #     for link in links:
+        #         futures.append(executor.submit(insert_link, category, link))
+
 
 if __name__ == "__main__":
     format = "[%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s"
-    coloredlogs.install(fmt=format, level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S")
+    coloredlogs.install(fmt=format, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
     main()
-
-# for link in links:
-#     content = { 'title': '', 'raw_text': [] }
-#     print("STARTING===: " + link)
-#     if (link not in keys):
-#         content = process_request(link, 1, content)
-#         print("FOUND %s Number Article Pages " % len(content['raw_text']))
-#         print("DONE WITH==: " + link)
-
-#         with open(LINK_LOG_PATH) as json_file:
-#             try:
-#                 decode = json.load(json_file)
-#                 json_file.close()
-#             except ValueError:
-#                 print('OP LOG EMPTY, Using')
-#                 decode = { }
-#         # print(content['raw_text'])
-#         content['text'] = ' '.join(content['raw_text'])
-#         content.pop('raw_text', None)
-#         decode[link] = content
-
-#         with open(LINK_LOG_PATH, 'w') as json_file:
-#             json.dump(decode, json_file, indent=4)
-#             json_file.close()
-#         # writer = open(LINK_LOG_PATH, 'a')
-#         # writer.write("%s\n" % link)
-#         # writer.close()
-#     else:
-#         print("DUPLICATE: " + link)
