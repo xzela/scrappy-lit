@@ -108,7 +108,7 @@ def fetch_category_page(category, num):
 def main():
     logging.info("Initializing")
     for category in CATEGORIES:
-        num = 34
+        num = 1
         links = []
         while items := fetch_category_page(category, num):
             # time.sleep(0.01)
