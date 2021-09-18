@@ -31,22 +31,22 @@ class Worker(Process):
 if __name__ == "__main__":
     # construct the queues
     manager = Manager()
-    inq = manager.Queue()
-    outq = manager.Queue()
+    input_queue = manager.Queue()
+    output_queue = manager.Queue()
 
     # construct the workers
-    workers = [Worker(str(name), inq, outq) for name in range(3)]
+    workers = [Worker(str(name), input_queue, output_queue) for name in range(3)]
     for worker in workers:
         worker.start()
 
     # add data to the queue for processing
     work_len = 10
     for x in range(work_len):
-        inq.put(x)
+        input_queue.put(x)
 
-    while outq.qsize() != work_len:
+    while output_queue.qsize() != work_len:
         # waiting for workers to finish
-        print("Waiting for workers. Out queue size {}".format(outq.qsize()))
+        print("Waiting for workers. Out queue size {}".format(output_queue.qsize()))
         time.sleep(1)
 
     # clean up
@@ -54,5 +54,5 @@ if __name__ == "__main__":
         worker.terminate()
 
     # print the outputs
-    while not outq.empty():
-        print(outq.get())
+    while not output_queue.empty():
+        print(output_queue.get())

@@ -3,7 +3,7 @@ thingy = { "food": "pizza", "drink": "pepsi"}
 empt = {}
 print(len(empt))
 
-url = '//www.literotica.com/stories/showstory.php?id=181688'
+url = 'http://www.literotica.com/stories/showstory.php?id=181688'
 
 o = urlparse(url)
 newUrl = o.geturl()

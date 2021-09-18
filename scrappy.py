@@ -11,6 +11,7 @@ import signal
 import sys
 import time
 import concurrent.futures
+from urllib.parse import urlparse
 
 DB_PATH ='./db/database.sqlite3'
 HEADERS = {
@@ -72,10 +73,15 @@ def extract_article(soup):
 
 def determine_articles(href, pagination, num, content):
     '''Gets a list of articles from the results page'''
-    link = href
+    url = href
     if pagination == True:
-        link += "?page=" + str(num)
-    req = requests.get(link, headers=HEADERS, allow_redirects=False)
+        url += "?page=" + str(num)
+    # ensure the url is using a valid scheme
+    o = urlparse(url)
+    parsedUrl = o.geturl()
+    if o.scheme != 'https':
+        parsedUrl = o._replace(scheme='https').geturl()
+    req = requests.get(parsedUrl, headers=HEADERS, allow_redirects=False)
     if req.status_code == 200:
         time.sleep(2.5)
         num += 1
@@ -84,7 +90,7 @@ def determine_articles(href, pagination, num, content):
         content['raw_text'] = content['raw_text'] + extract_article(soup)
         return determine_articles(href, True, num, content)
     else:
-        logging.warning("URL: %s Returned status code: %s", link, str(req.status_code))
+        logging.warning("URL: %s Returned status code: %s", url, str(req.status_code))
     return content
 
 def fetch_category_page(category, num):
