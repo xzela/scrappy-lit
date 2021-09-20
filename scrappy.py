@@ -46,11 +46,12 @@ def signal_handler(sig, frame):
 def insert_link(category, link):
     cursor.execute('SELECT * FROM content WHERE category=? AND link=?', (category, link))
     row = cursor.fetchone()
-    if row and len(row) > 0:
+    if row and len(row) > 0 and row['content']:
         logging.warning("Skipping Category: %s Link: %s" % (category, link))
-        return
+        return False
     cursor.execute('INSERT INTO content (category, link) VALUES (?, ?)', (category, link))
     connection.commit()
+    return True
 
 def update_link(category, link, title, text):
     cursor.execute('SELECT * FROM content WHERE category=? AND link=?', (category, link))
@@ -64,15 +65,31 @@ signal.signal(signal.SIGINT, signal_handler)
 
 def extract_article(soup):
     '''Extracts the text from an article page'''
-    panel = soup.select('div.panel.article')[0]
     texts = []
-    paragraphs = panel.find_all('p')
-    for p in paragraphs:
-        texts.append(p.text)
+    panel = soup.select('div.panel.article')
+    if len(panel) > 0:
+        paragraphs = panel[0].find_all('p')
+        for p in paragraphs:
+            texts.append(p.text)
+        return texts
+
+    story_panel = soup.select('.b-story-body-x p')
+    if (len(story_panel)) > 0:
+        texts.append(story_panel[0].text)
     return texts
+
+def extract_headline(soup):
+    headline = soup.select('h1.headline')
+    if len(headline) > 0:
+        return headline[0].text
+
+    story_header = soup.select('.b-story-header h1')
+    if len(story_header) > 0:
+        return story_header[0].text
 
 def determine_articles(href, pagination, num, content):
     '''Gets a list of articles from the results page'''
+
     url = href
     if pagination == True:
         url += "?page=" + str(num)
@@ -81,12 +98,18 @@ def determine_articles(href, pagination, num, content):
     parsedUrl = o.geturl()
     if o.scheme != 'https':
         parsedUrl = o._replace(scheme='https').geturl()
+    logging.info("Processing Article: %s", parsedUrl)
+    if 'showstory.php' in parsedUrl:
+        logging.info("Skipping Article: %s because it contains the bad layout", parsedUrl)
+        return False
+
     req = requests.get(parsedUrl, headers=HEADERS, allow_redirects=False)
     if req.status_code == 200:
-        time.sleep(2.5)
+        # time.sleep(2.5)
         num += 1
         soup = BeautifulSoup(req.text, 'html.parser')
-        content['title'] = soup.select('h1.headline')[0].text
+
+        content['title'] = extract_headline(soup)
         content['raw_text'] = content['raw_text'] + extract_article(soup)
         return determine_articles(href, True, num, content)
     else:
@@ -122,11 +145,15 @@ def main():
             for story in items:
                 links.append(story)
         for link in links:
-            insert_link(category, link)
-            content = determine_articles(link, False, 1, { 'raw_text': [] })
-            content['text'] = ' '.join(content['raw_text'])
-            content.pop('raw_text', None)
-            update_link(category, link, content['title'], content['text'])
+            is_new = insert_link(category, link)
+            if is_new:
+                content = determine_articles(link, False, 1, { 'raw_text': [] })
+                if not content:
+                    logging.info("Skipping Article: %s because we could not parse the page", link)
+                    continue
+                content['text'] = ' '.join(content['raw_text'])
+                content.pop('raw_text', None)
+                update_link(category, link, content['title'], content['text'])
 
         # logging.info("Found %s Pages for %s Category" % (len(links), category))
         # with concurrent.futures.ProcessPoolExecutor() as executor:
