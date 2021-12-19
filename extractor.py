@@ -19,7 +19,7 @@ def main():
         for row in cursor:
             if not row['content']:
                 logging.info('SKIPING %s because it is empty', row['link'])
-                return
+                continue
             logging.info('Writing %s to file', row['link'])
             file.write(row['content'] + '\n')
     file.close()

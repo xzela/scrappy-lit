@@ -2,38 +2,29 @@ import logging
 import threading
 import time
 import concurrent.futures
+import requests
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+}
 
-class FakeDatabase:
-    def __init__(self):
-        self.value = 0
-        self._lock = threading.Lock()
-
-    def update(self, name):
-        logging.info("Thread %s: starting update. Changing %s value", name, self.value)
-        logging.debug("Thread %s about to lock", name)
-        with self._lock:
-            logging.debug("Thread %s has lock", name)
-            local_copy = self.value
-            local_copy += 1
-            time.sleep(0.1)
-            self.value = local_copy
-            logging.debug("Thread %s about to release lock", name)
-        logging.debug("Thread %s after release", name)
-        logging.info("Thread %s: finishing update", name)
-
-def thread_function(name):
-    logging.info("Thread %s: starting", name)
-    time.sleep(2)
-    logging.info("Thread %s: finishing", name)
+def getUrl(url, index):
+    url += "?page=" + str(index)
+    logging.info("Fetching URL: %s", url)
+    req = requests.get(url, headers=HEADERS, allow_redirects=False)
+    if req.status_code != 200:
+        return False
+    return True
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.DEBUG, datefmt="%H:%M:%S")
 
-    database = FakeDatabase()
     logging.info("Testing update. Starting value is %d.", database.value)
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        for index in range(2):
-            executor.submit(database.update, index)
-    logging.info("Testing update. Ending value is %d.", database.value)
+        url = 'https://www.literotica.com/s/hadleys-other-cherry-ch-03'
+        i = 0
+        while True:
+            executor.submit(getUrl, url, i)
+            i += 1
+
